@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -104,6 +105,8 @@ class WebViewWithCache extends StatefulWidget {
 class _WebViewWithCacheState extends State<WebViewWithCache> {
   bool _isConnected = true;
   bool _isLoading = true; // To track if the web page is still loading.
+  bool _isExternalLinkOpened = false;
+  late WebViewController _webViewController; // Define _webViewController here
 
   @override
   void initState() {
@@ -129,6 +132,34 @@ class _WebViewWithCacheState extends State<WebViewWithCache> {
     });
   }
 
+  // Function to handle navigation requests
+  NavigationDecision _handleNavigation(NavigationRequest request) {
+    final url = request.url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return NavigationDecision.navigate; // Allow navigation for regular links.
+    } else {
+      _openExternalLink(
+          url); // Handle other URLs using the device's default browser.
+      return NavigationDecision.prevent; // Prevent WebView from navigating.
+    }
+  }
+
+  // Open a URL in the default browser
+  void _openExternalLink(String url) async {
+    if (await canLaunch(url)) {
+      setState(() {
+        _isExternalLinkOpened = true;
+      });
+      await launch(url);
+      setState(() {
+        _isExternalLinkOpened = false;
+      });
+    } else {
+      // Handle error if the URL cannot be launched.
+      // You can show an error dialog or message here.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _isConnected
@@ -137,8 +168,11 @@ class _WebViewWithCacheState extends State<WebViewWithCache> {
               WebView(
                 initialUrl: widget.initialUrl,
                 javascriptMode: JavascriptMode.unrestricted,
-                onPageFinished:
-                    _onPageFinished, // Callback when page finished loading.
+                onPageFinished: _onPageFinished,
+                navigationDelegate: _handleNavigation,
+                onWebViewCreated: (WebViewController controller) {
+                  _webViewController = controller;
+                },
               ),
               if (_isLoading)
                 const Center(
